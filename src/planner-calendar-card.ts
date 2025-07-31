@@ -24,7 +24,11 @@ export class PlannerCalendarCard extends LitElement {
             plugins: [dayGridPlugin, interactionPlugin],
             initialView: 'dayGridMonth',
             height: 'auto',
-            events: this.loadEvents.bind(this),
+            events: (info, successCallback, failureCallback) => {
+                this.getCalendarEvents(info.startStr, info.endStr)
+                    .then(events => successCallback(events))
+                    .catch(err => failureCallback(err));
+            },
         });
         this.calendar.render();
     }
@@ -35,48 +39,50 @@ export class PlannerCalendarCard extends LitElement {
         }
     }
 
-    // This is the async event source function FullCalendar calls with a date range
-    async loadEvents(fetchInfo: { startStr: string; endStr: string }, successCallback: (events: EventInput[]) => void, failureCallback: (error: any) => void) {
-        if (!this.config.entities || !this.hass) {
-            successCallback([]);
-            return;
-        }
-
-        const allEvents: EventInput[] = [];
-
-        // Fetch events for each configured calendar entity
-        for (const entityId of this.config.entities) {
-            try {
-                const events = await this.fetchCalendarEvents(entityId, fetchInfo.startStr, fetchInfo.endStr);
-                allEvents.push(...events);
-            } catch (err) {
-                console.error(`Failed to load events for calendar ${entityId}`, err);
-                failureCallback(err);
-                return;
-            }
-        }
-
-        successCallback(allEvents);
-    }
-
-    // Use Home Assistant's API to get events for a calendar entity within date range
     private async fetchCalendarEvents(entityId: string, start: string, end: string): Promise<EventInput[]> {
         const url = `/api/calendars/${entityId}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
 
-        const response = await this.hass.connection.fetch(url);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        // FIXED: Cast hass.connection to any to access accessToken
+        const token = (this.hass.connection as any).accessToken;
+
+        const resp = await fetch(url, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!resp.ok) {
+            throw new Error(`Failed to fetch events for ${entityId}, status: ${resp.status}`);
         }
 
-        const data = await response.json();
-
-        // Map HA calendar events to FullCalendar event format
+        const data = await resp.json();
         return data.map((ev: any) => ({
             title: ev.summary || ev.title || 'No title',
             start: ev.start || ev.start_time,
             end: ev.end || ev.end_time || ev.start,
             allDay: ev.all_day || false,
         }));
+    }
+
+    private async getCalendarEvents(start?: string, end?: string): Promise<EventInput[]> {
+        if (!this.config.entities || !start || !end) return [];
+
+        const events: EventInput[] = [];
+
+        // Fetch events from all configured calendars in parallel
+        const promises = this.config.entities.map(async (entityId: string) => {
+            try {
+                const evs = await this.fetchCalendarEvents(entityId, start, end);
+                events.push(...evs);
+            } catch (e) {
+                console.error(`Failed to load events for calendar ${entityId}`, e);
+            }
+        });
+
+        await Promise.all(promises);
+
+        return events;
     }
 
     render() {
