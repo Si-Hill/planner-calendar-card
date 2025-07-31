@@ -1,6 +1,6 @@
 {
   "name": "planner-calendar-card",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A Google-style planner calendar card for Home Assistant",
   "main": "dist/planner-calendar-card.js",
   "scripts": {
