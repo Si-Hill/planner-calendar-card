@@ -1,0 +1,8 @@
+{
+  "name": "Planner Calendar Card",
+  "content_in_root": false,
+  "filename": "planner-calendar-card.js",
+  "render_readme": true,
+  "description": "A Google-style monthly calendar Lovelace card",
+  "type": "plugin"
+}
