@@ -1,0 +1,7 @@
+{
+  "name": "Planner Calendar Card",
+  "filename": "planner-calendar-card.js",
+  "type": "module",
+  "render_readme": true,
+  "description": "A planner-style calendar card for Home Assistant"
+}
