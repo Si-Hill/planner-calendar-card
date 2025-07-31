@@ -40,30 +40,23 @@ export class PlannerCalendarCard extends LitElement {
     }
 
     private async fetchCalendarEvents(entityId: string, start: string, end: string): Promise<EventInput[]> {
-        const url = `/api/calendars/${entityId}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+        try {
+            const data = await this.hass.callApi<any[]>(
+                'GET',
+                `calendars/${entityId}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+            );
 
-        // FIXED: Cast hass.connection to any to access accessToken
-        const token = (this.hass.connection as any).accessToken;
-
-        const resp = await fetch(url, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-        });
-
-        if (!resp.ok) {
-            throw new Error(`Failed to fetch events for ${entityId}, status: ${resp.status}`);
+            return data.map((ev: any) => ({
+                title: ev.summary || ev.title || 'No title',
+                start: ev.start || ev.start_time,
+                end: ev.end || ev.end_time || ev.start,
+                allDay: ev.all_day || false,
+            }));
+        } catch (err: any) {
+            throw new Error(`Failed to fetch events for ${entityId}, status: ${err?.status || 'unknown'}`);
         }
-
-        const data = await resp.json();
-        return data.map((ev: any) => ({
-            title: ev.summary || ev.title || 'No title',
-            start: ev.start || ev.start_time,
-            end: ev.end || ev.end_time || ev.start,
-            allDay: ev.all_day || false,
-        }));
     }
+
 
     private async getCalendarEvents(start?: string, end?: string): Promise<EventInput[]> {
         if (!this.config.entities || !start || !end) return [];
