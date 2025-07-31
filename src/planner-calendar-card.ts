@@ -24,54 +24,36 @@ export class PlannerCalendarCard extends LitElement {
             plugins: [dayGridPlugin, interactionPlugin],
             initialView: 'dayGridMonth',
             height: 'auto',
-            // events now accepts a function with (fetchInfo, successCallback, failureCallback)
-            events: (fetchInfo, successCallback, failureCallback) => {
-                this.getCalendarEvents(fetchInfo.startStr, fetchInfo.endStr)
-                    .then(events => successCallback(events))
-                    .catch(err => {
-                        console.error('Error fetching calendar events:', err);
-                        failureCallback(err);
-                    });
-            },
+            events: () => this.getCalendarEvents()
         });
         this.calendar.render();
     }
 
-    updated(changedProps: Map<string, any>) {
-        if (changedProps.has('hass') && this.calendar) {
+    updated() {
+        if (this.calendar) {
             this.calendar.refetchEvents();
         }
     }
 
-    // Fetch events for all configured calendars from HA API asynchronously
-    async getCalendarEvents(startISO: string, endISO: string): Promise<EventInput[]> {
-        const events: EventInput[] = [];
-        if (!this.config.entities || !Array.isArray(this.config.entities)) {
-            return events;
-        }
+    getCalendarEvents() {
+        const events: any[] = [];
+        if (!this.config.entities) return events;
 
-        for (const calendarId of this.config.entities) {
-            try {
-                // Home Assistant calendar API expects: GET /api/calendars/<entity_id>?start=...&end=...
-                const result = await this.hass.callApi<Array<{summary?: string; start: string; end?: string; all_day?: boolean}>>('GET', `calendars/${calendarId}`, {
-                    start: startISO,
-                    end: endISO,
+        for (const entityId of this.config.entities) {
+            const state = this.hass.states[entityId];
+            if (!state) continue;
+
+            const calendarEvents = state.attributes.entries || state.attributes.events || [];
+
+            for (const ev of calendarEvents) {
+                events.push({
+                    title: ev.summary || ev.title || 'No title',
+                    start: ev.start || ev.start_time,
+                    end: ev.end || ev.end_time || ev.start,
+                    allDay: ev.all_day || false,
                 });
-
-                // result is an array of events, each with: summary, start, end, all_day etc.
-                for (const ev of result) {
-                    events.push({
-                        title: ev.summary || '(no title)',
-                        start: ev.start,
-                        end: ev.end || ev.start,
-                        allDay: ev.all_day || false,
-                    });
-                }
-            } catch (err) {
-                console.warn(`Failed to load events for calendar ${calendarId}`, err);
             }
         }
-
         return events;
     }
 
